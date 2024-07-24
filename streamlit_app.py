@@ -1,12 +1,16 @@
 import os
 import streamlit as st
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 import folium
 from streamlit_folium import st_folium
 import geopandas as gpd
+import plotly.express as px
+import plotly.graph_objects as go
 
 import const
+import trip_od
 
 st.set_page_config(**const.SET_PAGE_CONFIG)
 
@@ -54,21 +58,14 @@ zone_dict = {'松山市1区':'市駅、大街道、松山城', '松山市2区':'
 
 
 # タイトルと説明を追加
-st.title('データ可視化ダッシュボード')
-st.write('このダッシュボードでは、データの様々な視点からの分析を行います。')
+st.title('2023年松山都市圏パーソントリップ調査')
+st.write('このダッシュボードでは、各地域に住んでいる人の移動に着目して分析を行います。')
 
 # 上段の3列構成
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    # 地域選択フィルターを追加
-    st.subheader('地域と平日/休日を選択')
-    selected_area = st.selectbox('知りたい地域を選択してください', [f"{i} ({zone_dict[i]})" for i in zone_dict.keys()])
-    selected_area = selected_area.split(' ')[0] # 選択された地域名のみ取得
-    
-    # 平日/休日選択ラジオボタン
-    selected_day = st.radio('平日/休日を選択してください', ['平日', '休日'])
-    selected_day = 1 if selected_day == '平日' else 2
+    st.subheader('地図からゾーン名を確認')
     
     # Folium地図の作成
     m = folium.Map(location=[33.841936668807115, 132.75165552992496], zoom_start=12, tiles= "openstreetmap") # tiles= "cartodbpositron"
@@ -97,48 +94,164 @@ with col1:
         tooltip=folium.GeoJsonTooltip(fields=['R05大ゾーン', 'CITY_NAME'], aliases=['大ゾーン', '都市名'])
     ).add_to(m)
     
-    st_folium(m, height=500, use_container_width=True, returned_objects=[])
+    st_folium(m, height=400, use_container_width=True, returned_objects=[])
     
-df3_selected = df3[(df3['ID'].isin(df2.loc[df2['居住大ゾーン']==selected_area, 'ID'])) & (df3['11_平休'] == selected_day)]
 
 with col2:
-    st.subheader('外出した人の割合')
-    df3_selected
+    # 地域選択フィルターを追加
+    st.subheader('地域と平日/休日を選択')
+    selected_area = st.selectbox('知りたい地域を選択してください', [f"{i} ({zone_dict[i]})" for i in zone_dict.keys()])
+    selected_area = selected_area.split(' ')[0] # 選択された地域名のみ取得
+    
+    # 平日/休日選択ラジオボタン
+    selected_day_text = st.radio('平日/休日を選択してください', ['平日', '休日'])
+    selected_day = 1 if selected_day_text == '平日' else 2
+    
+df3_selected = df3.loc[(df3['ID'].isin(df2.loc[df2['居住大ゾーン']==selected_area, 'ID'])) & (df3['11_平休'] == selected_day)]
+df2_selected = df2.loc[df2['居住大ゾーン']==selected_area]
 
 with col3:
-    st.subheader('年齢別 外出した人の割合')
-    age_groups = ['5～14歳', '15～24歳', '25～44歳', '45～64歳', '65～74歳', '75歳～']
-    fig, ax = plt.subplots()
-    for age_group in age_groups:
-        data_age = filtered_data[filtered_data['年齢グループ'] == age_group]['外出した人の割合']
-        ax.hist(data_age, bins=30, alpha=0.5, label=age_group)
-    ax.legend(loc='best')
-    st.pyplot(fig)
+    st.subheader('地域の基本情報')
+    st.write('小数字は都市圏全体の平均値との差を表します。')
+    # 上段の3列構成
+    col3_1, col3_2 = st.columns(2)
+    with col3_1:
+        # 外出率
+        out_rate = (df2_selected[f'{selected_day_text}外出'] * df2_selected['拡大係数']).mean(skipna=True)
+        mean_out_rate = (df2[f'{selected_day_text}外出'] * df2['拡大係数']).mean(skipna=True)
+        st.metric(label="外出した人の割合",
+                value = f"{round(out_rate * 100, 1)} %",
+                delta = f"{round((out_rate - mean_out_rate) * 100, 1)} %")
+        
+        # トリップ数（ネット）
+        df2_net = df2_selected.loc[df2_selected[f'{selected_day_text}トリップ数']>0,:]
+        trip_num = (df2_net[f'{selected_day_text}トリップ数'] * df2_net['拡大係数']).mean(skipna=True)
+        df2_net = df2.loc[df2[f'{selected_day_text}トリップ数']>0,:]
+        mean_trip_num = (df2_net[f'{selected_day_text}トリップ数'] * df2_net['拡大係数']).mean(skipna=True)
+        st.metric(label="移動回数（外出した人）",
+                value=round(trip_num, 2),
+                delta = round(trip_num - mean_trip_num, 2))
+    
+    with col3_2:
+        # 手段
+        # df3_selectedの割合計算
+        counts_selected = df3_selected.groupby('代表交通手段_概要')['拡大係数'].sum()
+        total_selected = df3_selected['拡大係数'].sum()
+        ratio_selected = counts_selected.sort_index() / total_selected
+        for i in set(['鉄道', '路面電車', 'バス', '自動車', '自転車', '徒歩']) - set(ratio_selected.index):
+            ratio_selected[i] = 0
+
+        # df3の割合計算
+        counts_all = df3.groupby('代表交通手段_概要')['拡大係数'].sum()
+        total_all = df3['拡大係数'].sum()
+        ratio_all = counts_all.sort_index() / total_all
+
+        st.metric(label="自動車利用率",
+                value=f"{round(ratio_selected['自動車'] * 100, 1)} %",
+                delta = f"{round((ratio_selected['自動車'] - ratio_all['自動車']) * 100, 1)} %")
+        
+        # 手段
+        value = ratio_selected.loc[['鉄道', '路面電車', 'バス']].sum()
+        mean = ratio_all.loc[['鉄道', '路面電車', 'バス']].sum()
+        st.metric(label="公共交通利用率",
+                value=f"{round(value * 100, 1)} %",
+                delta = f"{round((value - mean) * 100, 1)} %")
+        
+        # 手段
+        st.metric(label="自転車利用率",
+                value=f"{round(ratio_selected['自転車'] * 100, 1)} %",
+                delta = f"{round((ratio_selected['自転車'] - ratio_all['自転車']) * 100, 1)} %")
+        
+        # 手段
+        st.metric(label="徒歩率",
+                value=f"{round(ratio_selected['徒歩'] * 100, 1)} %",
+                delta = f"{round((ratio_selected['徒歩'] - ratio_all['徒歩']) * 100, 1)} %")
+    
+    # 移動時間
+    
+    
+    # 移動距離
 
 # 下段の4列構成
-col4, col5, col6, col7 = st.columns(4)
+col4, col5 = st.columns(2)
 
 with col4:
-    st.subheader('トリップ数')
-    fig, ax = plt.subplots()
-    filtered_data['トリップ数'].dropna().hist(bins=30, ax=ax)
+    st.subheader('よく行く場所')
+    #selected_purpose = st.multiselect('目的', [f"{i}" for i in purpose_dict.values()])
+    purpose_o = st.selectbox('目的', [f"{i}" for i in purpose_dict.values()], key='origin')
+    if len(purpose_o) == 0:
+        st.write('目的を選択してください。')
+    else:
+        df_trip_o = trip_od.trip_od_purpose(purpose_list=[k for k, v in purpose_dict.items() if v == purpose_o], ODzone_list=list(zone_dict.keys()), df3=df3)
+    
+    fig = trip_od.plot_trip_origin(df_trip_o, selected_area, geojson_file_path, [k for k, v in purpose_dict.items() if v == purpose_o], title=purpose_o)
+    st.pyplot(fig)
+    
+with col5:
+    st.subheader('よく来る場所')
+    #selected_purpose = st.multiselect('目的', [f"{i}" for i in purpose_dict.values()])
+    purpose_d = st.selectbox('目的', [f"{i}" for i in purpose_dict.values()], key='destination')
+    if len(purpose_d) == 0:
+        st.write('目的を選択してください。')
+    else:
+        df_trip_d = trip_od.trip_od_purpose(purpose_list=[k for k, v in purpose_dict.items() if v == purpose_d], ODzone_list=list(zone_dict.keys()), df3=df3)
+    
+    fig = trip_od.plot_trip_destination(df_trip_d, selected_area, geojson_file_path, [k for k, v in purpose_dict.items() if v == purpose_d], title=purpose_d)
     st.pyplot(fig)
 
-with col5:
-    st.subheader('到着地の地図プロット')
-    st.map(filtered_data[['到着地_緯度', '到着地_経度']].dropna())
+
+col6, col7 = st.columns(2)
 
 with col6:
-    st.subheader('移動距離のヒストグラム')
-    fig, ax = plt.subplots()
-    filtered_data['移動距離'].dropna().hist(bins=30, ax=ax)
-    st.pyplot(fig)
+    st.subheader('目的地ごとの交通手段')   
+    # mode_df を作成する
+    mode_list_gaiyou = ['徒歩', '自転車', '原付・二輪', 'タクシー', '自動車', 'バス', '鉄道', '路面電車', '船', '飛行機', 'その他']
+    color_mode_dict = {'徒歩': 'royalblue', '自転車': 'lightgreen', '原付・二輪': 'green', 'タクシー': 'wheat', '自動車': 'purple', 
+                   'バス': 'orange', '鉄道': 'red', '路面電車': 'pink', '船': 'lightgray', '飛行機': 'darkgray', 'その他': 'dimgray'}
+    mode_df = pd.DataFrame(columns=mode_list_gaiyou + ['samples'], index=zone_dict.keys())
+
+    # mode_df を作成する
+    for d in zone_dict.keys():
+        df_od = df3.loc[(df3['出発地大ゾーン'] == selected_area) & (df3['到着地大ゾーン'] == d) & (df3['23_目的'] != 3), :]
+        if len(df_od) > 10:  # トリップ数が少ない場合は無視
+            for mode in mode_list_gaiyou:
+                mode_df.loc[d, mode] = (df_od['代表交通手段_概要'] == mode).sum() / len(df_od)
+                mode_df.loc[d, 'samples'] = len(df_od)
+
+    # 0のところは削除
+    mode_df = mode_df.loc[mode_df.sum(axis=1) != 0, :]
+
+    if len(mode_df) != 0:
+        # データフレームをモルテン形式に変換
+        melted_df = mode_df.reset_index().melt(id_vars=['index', 'samples'], value_vars=mode_list_gaiyou, var_name='交通手段', value_name='割合')
+        melted_df = melted_df[melted_df['割合'] > 0]  # 0の行を削除
+        melted_df = melted_df.rename(columns={'index': 'ゾーン'})
+        melted_df['割合'] = melted_df['割合'] * 100  # パーセント表示に変換
+
+        # y軸ラベルのカスタマイズ
+        y_labels = {zone: f"{zone_dict[zone]}へ (n={mode_df.loc[zone, 'samples']})" for zone in mode_df.index}
+        melted_df['ゾーンラベル'] = melted_df['ゾーン'].map(y_labels)
+
+        # グラフの作成
+        fig = px.bar(melted_df, 
+                    x='割合', 
+                    y='ゾーンラベル', 
+                    color='交通手段', 
+                    text='割合', 
+                    orientation='h',
+                    color_discrete_map=color_mode_dict,
+                    category_orders={'交通手段': mode_list_gaiyou})
+
+        # テキスト表示のフォーマット設定
+        fig.update_traces(texttemplate='%{text:.1f}%', textposition='inside')
+
+        # グラフのレイアウトを更新
+        fig.update_layout(title=f"{selected_area}({zone_dict[selected_area]})からの出発トリップの代表交通手段割合(帰宅を除く)",
+                        xaxis_title="割合 (%)",
+                        yaxis={'categoryorder':'total ascending'})  # ソートをトータルで行う
+
+        st.plotly_chart(fig)
+
 
 with col7:
-    st.subheader('滞在時間のヒストグラム')
-    fig, ax = plt.subplots()
-    filtered_data['滞在時間_分'].dropna().hist(bins=30, ax=ax)
-    st.pyplot(fig)
-# Streamlitアプリの実行
-if __name__ == '__main__':
-    st.run()
+    st.subheader('----')

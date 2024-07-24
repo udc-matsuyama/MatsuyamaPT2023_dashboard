@@ -7,3 +7,5 @@ SET_PAGE_CONFIG = {
         'About': "# This is a header. This is an *extremely* cool app!"
         }
 }
+
+PLOT_FONT = 'Hiragino Maru Gothic Pro'

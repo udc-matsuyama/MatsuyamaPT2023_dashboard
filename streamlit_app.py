@@ -62,7 +62,7 @@ st.title('2023年松山都市圏パーソントリップ調査')
 st.write('このダッシュボードでは、各地域に住んでいる人の移動に着目して分析を行います。')
 
 # 上段の3列構成
-col1, col2, col3 = st.columns(3)
+col1, col2, col3 = st.columns(3, gap='small', vertical_alignment='top')
 
 with col1:
     st.subheader('地図からゾーン名を確認')
@@ -112,7 +112,7 @@ df2_selected = df2.loc[df2['居住大ゾーン']==selected_area]
 
 with col3:
     st.subheader('地域の基本情報')
-    st.write('小数字は都市圏全体の平均値との差を表します。')
+    st.write('<span style="color:green"> 小数字</span>は都市圏全体の平均値との差を表します。', unsafe_allow_html=True)
     # 上段の3列構成
     col3_1, col3_2 = st.columns(2)
     with col3_1:
@@ -173,10 +173,10 @@ with col3:
     # 移動距離
 
 # 下段の4列構成
-col4, col5 = st.columns(2)
+col4, col5 = st.columns(2, gap='small', vertical_alignment='top')
 
 with col4:
-    st.subheader('よく行く場所')
+    st.subheader('住民がよく訪れる場所')
     #selected_purpose = st.multiselect('目的', [f"{i}" for i in purpose_dict.values()])
     purpose_o = st.selectbox('目的', [f"{i}" for i in purpose_dict.values()], key='origin')
     if len(purpose_o) == 0:
@@ -188,7 +188,7 @@ with col4:
     st.pyplot(fig)
     
 with col5:
-    st.subheader('よく来る場所')
+    st.subheader('訪れる人がどこから来るか')
     #selected_purpose = st.multiselect('目的', [f"{i}" for i in purpose_dict.values()])
     purpose_d = st.selectbox('目的', [f"{i}" for i in purpose_dict.values()], key='destination')
     if len(purpose_d) == 0:
@@ -200,58 +200,56 @@ with col5:
     st.pyplot(fig)
 
 
-col6, col7 = st.columns(2)
 
-with col6:
-    st.subheader('目的地ごとの交通手段')   
-    # mode_df を作成する
-    mode_list_gaiyou = ['徒歩', '自転車', '原付・二輪', 'タクシー', '自動車', 'バス', '鉄道', '路面電車', '船', '飛行機', 'その他']
-    color_mode_dict = {'徒歩': 'royalblue', '自転車': 'lightgreen', '原付・二輪': 'green', 'タクシー': 'wheat', '自動車': 'purple', 
-                   'バス': 'orange', '鉄道': 'red', '路面電車': 'pink', '船': 'lightgray', '飛行機': 'darkgray', 'その他': 'dimgray'}
-    mode_df = pd.DataFrame(columns=mode_list_gaiyou + ['samples'], index=zone_dict.keys())
+st.subheader('目的地ごとの交通手段')   
+# mode_df を作成する
+mode_list_gaiyou = ['徒歩', '自転車', '原付・二輪', 'タクシー', '自動車', 'バス', '鉄道', '路面電車', '船', '飛行機', 'その他']
+color_mode_dict = {'徒歩': 'royalblue', '自転車': 'lightgreen', '原付・二輪': 'green', 'タクシー': 'wheat', '自動車': 'purple', 
+                'バス': 'orange', '鉄道': 'red', '路面電車': 'pink', '船': 'lightgray', '飛行機': 'darkgray', 'その他': 'dimgray'}
+mode_df = pd.DataFrame(columns=mode_list_gaiyou + ['samples'], index=zone_dict.keys())
 
-    # mode_df を作成する
-    for d in zone_dict.keys():
-        df_od = df3.loc[(df3['出発地大ゾーン'] == selected_area) & (df3['到着地大ゾーン'] == d) & (df3['23_目的'] != 3), :]
-        if len(df_od) > 10:  # トリップ数が少ない場合は無視
-            for mode in mode_list_gaiyou:
-                mode_df.loc[d, mode] = (df_od['代表交通手段_概要'] == mode).sum() / len(df_od)
-                mode_df.loc[d, 'samples'] = len(df_od)
+# mode_df を作成する
+for d in zone_dict.keys():
+    df_od = df3.loc[(df3['出発地大ゾーン'] == selected_area) & (df3['到着地大ゾーン'] == d) & (df3['23_目的'] != 3), :]
+    if len(df_od) > 10:  # トリップ数が少ない場合は無視
+        for mode in mode_list_gaiyou:
+            mode_df.loc[d, mode] = (df_od['代表交通手段_概要'] == mode).sum() / len(df_od)
+            mode_df.loc[d, 'samples'] = len(df_od)
 
-    # 0のところは削除
-    mode_df = mode_df.loc[mode_df.sum(axis=1) != 0, :]
+# 0のところは削除
+mode_df = mode_df.loc[mode_df.sum(axis=1) != 0, :]
 
-    if len(mode_df) != 0:
-        # データフレームをモルテン形式に変換
-        melted_df = mode_df.reset_index().melt(id_vars=['index', 'samples'], value_vars=mode_list_gaiyou, var_name='交通手段', value_name='割合')
-        melted_df = melted_df[melted_df['割合'] > 0]  # 0の行を削除
-        melted_df = melted_df.rename(columns={'index': 'ゾーン'})
-        melted_df['割合'] = melted_df['割合'] * 100  # パーセント表示に変換
+if len(mode_df) != 0:
+    # データフレームをモルテン形式に変換
+    melted_df = mode_df.reset_index().melt(id_vars=['index', 'samples'], value_vars=mode_list_gaiyou, var_name='交通手段', value_name='割合')
+    melted_df = melted_df[melted_df['割合'] > 0]  # 0の行を削除
+    melted_df = melted_df.rename(columns={'index': 'ゾーン'})
+    melted_df['割合'] = melted_df['割合'].apply(lambda x: round(100 * x, 1))
 
-        # y軸ラベルのカスタマイズ
-        y_labels = {zone: f"{zone_dict[zone]}へ (n={mode_df.loc[zone, 'samples']})" for zone in mode_df.index}
-        melted_df['ゾーンラベル'] = melted_df['ゾーン'].map(y_labels)
+    # y軸ラベルのカスタマイズ
+    y_labels = {zone: f"{zone_dict[zone]}へ (n={mode_df.loc[zone, 'samples']})" for zone in mode_df.index}
+    melted_df['ゾーンラベル'] = melted_df['ゾーン'].map(y_labels)
 
-        # グラフの作成
-        fig = px.bar(melted_df, 
-                    x='割合', 
-                    y='ゾーンラベル', 
-                    color='交通手段', 
-                    text='割合', 
-                    orientation='h',
-                    color_discrete_map=color_mode_dict,
-                    category_orders={'交通手段': mode_list_gaiyou})
+    # グラフの作成
+    fig = px.bar(melted_df, 
+                x='割合', 
+                y='ゾーンラベル', 
+                color='交通手段', 
+                text='割合', 
+                orientation='h',
+                color_discrete_map=color_mode_dict,
+                category_orders={'交通手段': mode_list_gaiyou})
 
-        # テキスト表示のフォーマット設定
-        fig.update_traces(texttemplate='%{text:.1f}%', textposition='inside')
+    # テキスト表示のフォーマット設定
+    fig.update_traces(textposition='inside', textfont_size=14)
+    # グラフのレイアウトを更新
+    fig.update_layout(title=f"{selected_area}({zone_dict[selected_area]})からの出発トリップの代表交通手段割合(帰宅を除く)",
+                    xaxis_title="割合 (%)",
+                    yaxis_title="",
+                    yaxis={'categoryorder':'total ascending', 'tickfont': {'size': 16}},
+                    legend = {'title': '交通手段', 'title_font': {'size': 16}, 'font': {'size': 16}},
+                    height=700)  # ソートをトータルで行う
 
-        # グラフのレイアウトを更新
-        fig.update_layout(title=f"{selected_area}({zone_dict[selected_area]})からの出発トリップの代表交通手段割合(帰宅を除く)",
-                        xaxis_title="割合 (%)",
-                        yaxis={'categoryorder':'total ascending'})  # ソートをトータルで行う
-
-        st.plotly_chart(fig)
+    st.plotly_chart(fig)
 
 
-with col7:
-    st.subheader('----')

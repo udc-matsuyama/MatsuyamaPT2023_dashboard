@@ -1,3 +1,4 @@
+# ライブラリのインポート
 import os
 import streamlit as st
 import pandas as pd
@@ -274,5 +275,3 @@ with col5:
     
     fig = trip_od.plot_trip_destination(df_trip_d, selected_area, geojson_file_path, [k for k, v in purpose_dict.items() if v == purpose_d], title=purpose_d)
     st.pyplot(fig)
-
-

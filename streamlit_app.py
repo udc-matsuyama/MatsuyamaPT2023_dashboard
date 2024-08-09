@@ -94,7 +94,7 @@ with col1:
         tooltip=folium.GeoJsonTooltip(fields=['R05大ゾーン', 'CITY_NAME'], aliases=['大ゾーン', '都市名'])
     ).add_to(m)
     
-    st_folium(m, height=400, use_container_width=True, returned_objects=[])
+    st_folium(m, height=350, use_container_width=True, returned_objects=[])
     
 
 with col2:
@@ -104,11 +104,33 @@ with col2:
     selected_area = selected_area.split(' ')[0] # 選択された地域名のみ取得
     
     # 平日/休日選択ラジオボタン
-    selected_day_text = st.radio('平日/休日を選択してください', ['平日', '休日'])
+    selected_day_text = st.radio('平日/休日を選択してください', ['平日', '休日'], horizontal=True)
     selected_day = 1 if selected_day_text == '平日' else 2
     
-df3_selected = df3.loc[(df3['ID'].isin(df2.loc[df2['居住大ゾーン']==selected_area, 'ID'])) & (df3['11_平休'] == selected_day)]
-df2_selected = df2.loc[df2['居住大ゾーン']==selected_area]
+    # 個人属性の選択ボタン
+    age_dict = {'全て': (0, 130), '18歳未満': (0, 17), '18歳から59歳': (18, 59), '60歳以上': (60, 130)}
+    age = st.selectbox('年齢', list(age_dict.keys()))
+    gender_dict = {'全て': 0, '男性': 1, '女性': 2}
+    gender = st.selectbox('性別', ['全て', '男性', '女性'])
+    childcare = st.selectbox('15歳以下の子供の有無', ['全て', '子供あり'])
+    car = st.selectbox('運転免許の有無', ['全て', '免許なし'])
+    
+    df3_selected = df3.loc[(df3['ID'].isin(df2.loc[df2['居住大ゾーン']==selected_area, 'ID'])) & 
+                        (df3['11_平休'] == selected_day) &
+                        (df3['ID'].isin(df2.loc[df2['22_■3_年齢'].between(age_dict[age][0], age_dict[age][1]), 'ID'])) &
+                        (df3['ID'].isin(df2.loc[df2['21_■3_性別']==gender_dict[gender], 'ID']) if gender != '全て' else True) &
+                        (df3['5_整理番号_市町村'].isin(df2.loc[df2['22_■3_年齢']<=15, '5_整理番号_市町村・ロット・SEQ']) if childcare == '子供あり' else True) &
+                        (df3['ID'].isin(df2.loc[df2['27_■3_保有運転免許_①保有運転免許種類'].isin([4, 5]), 'ID']) if car == '免許なし' else True)
+                        ]
+    df2_selected = df2.loc[(df2['居住大ゾーン']==selected_area) & 
+                        (df2['22_■3_年齢'].between(age_dict[age][0], age_dict[age][1])) &
+                        (df2['21_■3_性別']==gender_dict[gender] if gender != '全て' else True) &
+                        (df2['5_整理番号_市町村・ロット・SEQ'].isin(df2.loc[df2['22_■3_年齢']<=15, '5_整理番号_市町村・ロット・SEQ']) if childcare == '子供あり' else True) &
+                        (df2['27_■3_保有運転免許_①保有運転免許種類'].isin([4, 5]) if car == '免許なし' else True)
+                       ]
+    
+    # データ数
+    st.write(f"該当するデータ: {len(df2_selected)}人, {len(df3_selected)}回の移動")
 
 with col3:
     st.subheader('地域の基本情報')
@@ -172,34 +194,6 @@ with col3:
     
     # 移動距離
 
-# 下段の4列構成
-col4, col5 = st.columns(2, gap='small', vertical_alignment='top')
-
-with col4:
-    st.subheader('住民がよく訪れる場所')
-    #selected_purpose = st.multiselect('目的', [f"{i}" for i in purpose_dict.values()])
-    purpose_o = st.selectbox('目的', [f"{i}" for i in purpose_dict.values()], key='origin')
-    if len(purpose_o) == 0:
-        st.write('目的を選択してください。')
-    else:
-        df_trip_o = trip_od.trip_od_purpose(purpose_list=[k for k, v in purpose_dict.items() if v == purpose_o], ODzone_list=list(zone_dict.keys()), df3=df3)
-    
-    fig = trip_od.plot_trip_origin(df_trip_o, selected_area, geojson_file_path, [k for k, v in purpose_dict.items() if v == purpose_o], title=purpose_o)
-    st.pyplot(fig)
-    
-with col5:
-    st.subheader('訪れる人がどこから来るか')
-    #selected_purpose = st.multiselect('目的', [f"{i}" for i in purpose_dict.values()])
-    purpose_d = st.selectbox('目的', [f"{i}" for i in purpose_dict.values()], key='destination')
-    if len(purpose_d) == 0:
-        st.write('目的を選択してください。')
-    else:
-        df_trip_d = trip_od.trip_od_purpose(purpose_list=[k for k, v in purpose_dict.items() if v == purpose_d], ODzone_list=list(zone_dict.keys()), df3=df3)
-    
-    fig = trip_od.plot_trip_destination(df_trip_d, selected_area, geojson_file_path, [k for k, v in purpose_dict.items() if v == purpose_d], title=purpose_d)
-    st.pyplot(fig)
-
-
 
 st.subheader('目的地ごとの交通手段')   
 # mode_df を作成する
@@ -210,7 +204,8 @@ mode_df = pd.DataFrame(columns=mode_list_gaiyou + ['samples'], index=zone_dict.k
 
 # mode_df を作成する
 for d in zone_dict.keys():
-    df_od = df3.loc[(df3['出発地大ゾーン'] == selected_area) & (df3['到着地大ゾーン'] == d) & (df3['23_目的'] != 3), :]
+    #df_od = df3.loc[(df3['出発地大ゾーン'] == selected_area) & (df3['到着地大ゾーン'] == d) & (df3['23_目的'] != 3), :]
+    df_od = df3_selected.loc[(df3_selected['到着地大ゾーン'] == d) & (df3_selected['23_目的'] != 3), :]
     if len(df_od) > 10:  # トリップ数が少ない場合は無視
         for mode in mode_list_gaiyou:
             mode_df.loc[d, mode] = (df_od['代表交通手段_概要'] == mode).sum() / len(df_od)
@@ -251,5 +246,33 @@ if len(mode_df) != 0:
                     height=700)  # ソートをトータルで行う
 
     st.plotly_chart(fig)
+
+
+# 下段の2列構成
+col4, col5 = st.columns(2, gap='small', vertical_alignment='top')
+
+with col4:
+    st.subheader('住民がよく訪れる場所')
+    #selected_purpose = st.multiselect('目的', [f"{i}" for i in purpose_dict.values()])
+    purpose_o = st.selectbox('目的', [f"{i}" for i in purpose_dict.values()], key='origin')
+    if len(purpose_o) == 0:
+        st.write('目的を選択してください。')
+    else:
+        df_trip_o = trip_od.trip_od_purpose(purpose_list=[k for k, v in purpose_dict.items() if v == purpose_o], ODzone_list=list(zone_dict.keys()), df3=df3)
+    
+    fig = trip_od.plot_trip_origin(df_trip_o, selected_area, geojson_file_path, [k for k, v in purpose_dict.items() if v == purpose_o], title=purpose_o)
+    st.pyplot(fig)
+    
+with col5:
+    st.subheader('訪れる人がどこから来るか')
+    #selected_purpose = st.multiselect('目的', [f"{i}" for i in purpose_dict.values()])
+    purpose_d = st.selectbox('目的', [f"{i}" for i in purpose_dict.values()], key='destination')
+    if len(purpose_d) == 0:
+        st.write('目的を選択してください。')
+    else:
+        df_trip_d = trip_od.trip_od_purpose(purpose_list=[k for k, v in purpose_dict.items() if v == purpose_d], ODzone_list=list(zone_dict.keys()), df3=df3)
+    
+    fig = trip_od.plot_trip_destination(df_trip_d, selected_area, geojson_file_path, [k for k, v in purpose_dict.items() if v == purpose_d], title=purpose_d)
+    st.pyplot(fig)
 
 

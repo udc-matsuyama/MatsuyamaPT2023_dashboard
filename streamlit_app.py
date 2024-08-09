@@ -18,7 +18,7 @@ st.set_page_config(**const.SET_PAGE_CONFIG)
 # このファイルのディレクトリに移動
 os.chdir(os.path.dirname(__file__))
 
-# CSVファイルを読み込む
+# CSVファイルを読み込む。
 df3_path = 'data/3個人票.csv'
 # df1
 df1 = pd.read_csv("data/1世帯情報.csv", encoding='utf-8')

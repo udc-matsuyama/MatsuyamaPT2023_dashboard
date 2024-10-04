@@ -4,8 +4,6 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.ticker as ticker
-import japanize_matplotlib
 import folium
 from streamlit_folium import st_folium
 import geopandas as gpd
@@ -189,10 +187,19 @@ with col3:
     
     # 移動距離
 
-    # 国勢調査の結果
+    # 花本担当分 国勢調査の結果-------------------------------------------------------------------
     with col3:
-        st.write('国勢調査の結果')
-        if selected_area == '全域':
+        st.write(f'{selected_area}の年代別人口')
+        
+        if selected_area != '全域':
+            df = pd.read_csv('census_data/population_by_generation.csv',index_col=0)
+            # グラフを描画
+            fig, ax = plt.subplots()
+            ax.bar(df.loc[selected_area,:].index,df.loc[selected_area,:],width=0.6)
+            plt.xticks(rotation=45)
+            st.pyplot(plt)
+            
+        elif selected_area == '全域':
             PATH = 'census_data/census_population.csv'
             df_census = pd.read_csv(PATH, encoding='shift_jis',header=4)
 
@@ -209,17 +216,13 @@ with col3:
             df_census_level1_st=df_census_level1_st.rename(columns={'（再掲）15歳未満': '15歳未満','（再掲）15〜64歳': '15〜64歳','（再掲）65歳以上': '65歳〜','年齢「不詳」': '不明',}, 
           index={0: '松山市',2576: '伊予市',2871: '東温市',3015: '松前町',3036: '砥部町'})
             df_sum = df_census_level1_st.sum()
-            # st.bar_chart(data=df_sum,x=df_sum.index)
             # グラフを描画
             fig, ax = plt.subplots()
             ax.bar(df_sum.index,df_sum)
             # Y軸ラベルを「万人」単位で表示
-            ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: f'{int(x/10000)}万人'))
-            plt.show()
+            # ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: f'{int(x/10000)}万人'))
             st.pyplot(plt)
-
-        else:
-            st.write('準備中です。ゾーニングを知る必要')
+    # --------------------------------------------------------------------------------
 
 
 

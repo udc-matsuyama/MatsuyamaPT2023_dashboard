@@ -106,20 +106,20 @@ with col2:
     selected_day = 1 if selected_day_text == '平日' else 2
     
     # 個人属性の選択ボタン
-    age_dict = {'全て': (0, 130), '22歳以下': (0, 22), '23歳から39歳': (18, 39), '40歳から65歳': (40, 65), '66歳以上': (66, 130)}
+    age_dict = {'全て': (0, 130), '22歳以下': (0, 22), '23歳から39歳': (23, 39), '40歳から65歳': (40, 65), '66歳以上': (66, 130)}
     age = st.selectbox('年齢', list(age_dict.keys()))
-    childcare = st.selectbox('15歳以下の子供の有無', ['全て', '子供あり'])
+    childcare = st.selectbox('18歳以下の子供の有無', ['全て', '子供あり'])
     car = st.selectbox('運転免許の有無', ['全て', '免許なし'])
 
     df3_selected = df3.loc[(df3['ID'].isin(df2.loc[df2['居住大ゾーン']==selected_area, 'ID']) if selected_area != "全域" else True) & 
                         (df3['11_平休'] == selected_day) &
                         (df3['ID'].isin(df2.loc[df2['22_■3_年齢'].between(age_dict[age][0], age_dict[age][1]), 'ID'])) &
-                        (df3['5_整理番号_市町村'].isin(df2.loc[df2['22_■3_年齢']<=15, '5_整理番号_市町村・ロット・SEQ']) if childcare == '子供あり' else True) &
+                        ((df3['5_整理番号_市町村'].isin(df2.loc[df2['22_■3_年齢']<=18, '5_整理番号_市町村・ロット・SEQ']))&(df3['ID'].isin(df2.loc[df2['22_■3_年齢']>20, 'ID'])) if childcare == '子供あり' else True) &
                         (df3['ID'].isin(df2.loc[df2['27_■3_保有運転免許_①保有運転免許種類'].isin([4, 5]), 'ID']) if car == '免許なし' else True)
                         ]
     df2_selected = df2.loc[(df2['居住大ゾーン']==selected_area if selected_area != "全域" else True) &
                         (df2['22_■3_年齢'].between(age_dict[age][0], age_dict[age][1])) &
-                        (df2['5_整理番号_市町村・ロット・SEQ'].isin(df2.loc[df2['22_■3_年齢']<=15, '5_整理番号_市町村・ロット・SEQ']) if childcare == '子供あり' else True) &
+                        ((df2['5_整理番号_市町村・ロット・SEQ'].isin(df2.loc[df2['22_■3_年齢']<=18, '5_整理番号_市町村・ロット・SEQ']))&(df2['22_■3_年齢']>20) if childcare == '子供あり' else True) &
                         (df2['27_■3_保有運転免許_①保有運転免許種類'].isin([4, 5]) if car == '免許なし' else True)
                     ]        
     # データ数

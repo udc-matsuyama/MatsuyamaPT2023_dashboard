@@ -9,6 +9,9 @@ from streamlit_folium import st_folium
 import geopandas as gpd
 import plotly.express as px
 import plotly.graph_objects as go
+from dotenv import load_dotenv
+from pydrive.auth import GoogleAuth
+from pydrive.drive import GoogleDrive
 
 import const
 import trip_od
@@ -18,6 +21,68 @@ st.set_page_config(**const.SET_PAGE_CONFIG)
 # このファイルのディレクトリに移動
 os.chdir(os.path.dirname(__file__))
 
+# .envファイルを読み込み
+load_dotenv()
+# 環境変数から認証情報を取得
+#client_id = os.getenv('CLIENT_ID')
+#client_secret = os.getenv('CLIENT_SECRET')
+#refresh_token = os.getenv('REFRESH_TOKEN')
+#token_uri = os.getenv('TOKEN_URI')
+client_id = st.secrets["CLIENT_ID"]
+client_secret = st.secrets["CLIENT_SECRET"]
+refresh_token = st.secrets["REFRESH_TOKEN"]
+token_uri = st.secrets["TOKEN_URI"]
+
+# 認証フローをセットアップ
+gauth = GoogleAuth()
+gauth.settings['client_config'] = {
+    "client_id": client_id,
+    "client_secret": client_secret,
+    "refresh_token": refresh_token,
+    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+    "token_uri": token_uri,
+    "redirect_uris": ["urn:ietf:wg:oauth:2.0:oob"]
+}
+# 初回認証かリフレッシュトークンが無効の場合はブラウザで認証を行う
+try:
+    if gauth.access_token_expired:
+        # アクセストークンが期限切れならリフレッシュ
+        gauth.Refresh()
+    else:
+        # アクセストークンが有効な場合はそのまま使用
+        gauth.Authorize()
+except:
+    # リフレッシュトークンがない場合は初回認証を実行
+    gauth.LocalWebserverAuth()
+    gauth.SaveCredentialsFile("credentials.json")
+
+# Google Driveへのアクセスを設定
+drive = GoogleDrive(gauth)
+
+# 1世帯情報.csvをダウンロード
+file_id = '1ntzZGqC5sXzvqg4nUCIpDiP_lGAqOvW4'
+downloaded = drive.CreateFile({'id': file_id})
+downloaded.GetContentFile('data/1世帯情報.csv')
+df1 = pd.read_csv('data/1世帯情報.csv')
+# 2世帯個人.csvをダウンロード
+file_id = '1blEh9tQ_oRTNshrj4_4U7vXCZCNXclMk'
+downloaded = drive.CreateFile({'id': file_id})
+downloaded.GetContentFile('data/2世帯個人.csv')
+df2 = pd.read_csv('data/2世帯個人.csv')
+# 3個人票.csvをダウンロード
+file_id = '1u4iLbvj-zW-Qp4OblGj03dqBTLqn5Zj7'
+downloaded = drive.CreateFile({'id': file_id})
+downloaded.GetContentFile('data/3個人票.csv')
+df3 = pd.read_csv('data/3個人票.csv')
+# 大ゾーン.geojsonをダウンロード
+file_id = '1q1BXkA5sW-3YLYNo6tPCyBs1nJfY-mKC'
+downloaded = drive.CreateFile({'id': file_id})
+downloaded.GetContentFile('大ゾーン.geojson')
+geo_data = gpd.read_file('大ゾーン.geojson')
+geojson_file_path = '大ゾーン.geojson'
+
+
+'''
 # CSVファイルを読み込む。
 df3_path = 'data/3個人票.csv'
 # df1
@@ -33,6 +98,7 @@ df3 = pd.read_csv(df3_path, encoding='utf-8', dtype=dtype_dict)
 # GeoJSONファイル
 geojson_file_path = 'data/大ゾーン.geojson'
 geo_data = gpd.read_file(geojson_file_path)
+'''
 
 # 目的コード
 purpose_dict = {1:"通勤", 2:"通学", 3:"帰宅", 4:"買い物", 5:"食事・社交・娯楽", 

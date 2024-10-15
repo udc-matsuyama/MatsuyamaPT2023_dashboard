@@ -53,8 +53,7 @@ try:
         gauth.Authorize()
 except:
     # リフレッシュトークンがない場合は初回認証を実行
-    st.error("Authorization failed. Please set up Google Drive API credentials.")
-    st.stop()
+    gauth.LocalWebserverAuth()
 
 # Google Driveへのアクセスを設定
 drive = GoogleDrive(gauth)

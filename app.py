@@ -12,6 +12,10 @@ import plotly.graph_objects as go
 from dotenv import load_dotenv
 from pydrive.auth import GoogleAuth
 from pydrive.drive import GoogleDrive
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseDownload
+import io
 
 import const
 import trip_od
@@ -21,13 +25,15 @@ st.set_page_config(**const.SET_PAGE_CONFIG)
 # このファイルのディレクトリに移動
 os.chdir(os.path.dirname(__file__))
 
+'''
 # .envファイルを読み込み
-load_dotenv()
+#load_dotenv()
 # 環境変数から認証情報を取得
 #client_id = os.getenv('CLIENT_ID')
 #client_secret = os.getenv('CLIENT_SECRET')
 #refresh_token = os.getenv('REFRESH_TOKEN')
 #token_uri = os.getenv('TOKEN_URI')
+
 client_id = st.secrets["CLIENT_ID"]
 client_secret = st.secrets["CLIENT_SECRET"]
 refresh_token = st.secrets["REFRESH_TOKEN"]
@@ -80,6 +86,62 @@ downloaded = drive.CreateFile({'id': file_id})
 downloaded.GetContentFile('大ゾーン.geojson')
 geo_data = gpd.read_file('大ゾーン.geojson')
 geojson_file_path = '大ゾーン.geojson'
+'''
+
+# Secrets Managementからサービスアカウント情報を取得して辞書に再構築
+service_account_info = {
+    "type": st.secrets["SERVICE_ACCOUNT_TYPE"],
+    "project_id": st.secrets["PROJECT_ID"],
+    "private_key_id": st.secrets["PRIVATE_KEY_ID"],
+    "private_key": st.secrets["PRIVATE_KEY"],
+    "client_email": st.secrets["CLIENT_EMAIL"],
+    "client_id": st.secrets["CLIENT_ID"],
+    "auth_uri": st.secrets["AUTH_URI"],
+    "token_uri": st.secrets["TOKEN_URI"],
+    "auth_provider_x509_cert_url": st.secrets["AUTH_PROVIDER_X509_CERT_URL"],
+    "client_x509_cert_url": st.secrets["CLIENT_X509_CERT_URL"]
+}
+
+# Google Drive APIのスコープ
+SCOPES = ['https://www.googleapis.com/auth/drive']
+# Google API認証用のサービスアカウント情報を使って認証を実行
+credentials = service_account.Credentials.from_service_account_info(service_account_info)
+
+# Google Drive APIクライアントを作成
+service = build('drive', 'v3', credentials=credentials)
+
+# Google Driveからファイルを取得する関数
+def download_file(file_id, file_name):
+    request = service.files().get_media(fileId=file_id)
+    with open(file_name, 'wb') as file:
+        downloader = MediaIoBaseDownload(file, request)
+        done = False
+        while not done:
+            status, done = downloader.next_chunk()
+            print(f"Download {int(status.progress() * 100)}%")
+    return file_name
+
+# 1世帯情報.csvをダウンロード
+file_id = '1ntzZGqC5sXzvqg4nUCIpDiP_lGAqOvW4'
+file_name = 'data/1世帯情報.csv'
+downloaded_file = download_file(file_id, file_name)
+df1 = pd.read_csv(downloaded_file)
+# 2世帯個人.csvをダウンロード
+file_id = '1blEh9tQ_oRTNshrj4_4U7vXCZCNXclMk'
+file_name = 'data/2世帯個人.csv'
+downloaded_file = download_file(file_id, file_name)
+df2 = pd.read_csv(downloaded_file)
+# 3個人票.csvをダウンロード
+file_id = '1u4iLbvj-zW-Qp4OblGj03dqBTLqn5Zj7'
+file_name = 'data/3個人票.csv'
+downloaded_file = download_file(file_id, file_name)
+df3 = pd.read_csv(downloaded_file)
+# 大ゾーン.geojsonをダウンロード
+file_id = '1q1BXkA5sW-3YLYNo6tPCyBs1nJfY-mKC'
+file_name = 'data/大ゾーン.geojson'
+downloaded_file = download_file(file_id, file_name)
+geo_data = gpd.read_file(downloaded_file)
+geojson_file_path = 'data/大ゾーン.geojson'
 
 
 '''

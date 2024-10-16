@@ -24,6 +24,8 @@ st.set_page_config(**const.SET_PAGE_CONFIG)
 
 # このファイルのディレクトリに移動
 os.chdir(os.path.dirname(__file__))
+# ディレクトリが存在しない場合は作成
+os.makedirs('data', exist_ok=True)
 
 '''
 # .envファイルを読み込み
@@ -105,7 +107,7 @@ service_account_info = {
 # Google Drive APIのスコープ
 SCOPES = ['https://www.googleapis.com/auth/drive']
 # Google API認証用のサービスアカウント情報を使って認証を実行
-credentials = service_account.Credentials.from_service_account_info(service_account_info)
+credentials = service_account.Credentials.from_service_account_info(service_account_info, scopes=SCOPES)
 
 # Google Drive APIクライアントを作成
 service = build('drive', 'v3', credentials=credentials)

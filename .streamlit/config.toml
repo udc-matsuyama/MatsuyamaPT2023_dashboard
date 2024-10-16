@@ -28,3 +28,6 @@ font="sans serif"
 
 [runner]
 magicEnabled = false
+
+[client]
+showSidebarNavigation = false

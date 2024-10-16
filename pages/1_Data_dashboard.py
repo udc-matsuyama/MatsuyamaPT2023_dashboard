@@ -4,92 +4,34 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import japanize_matplotlib
 import folium
 from streamlit_folium import st_folium
 import geopandas as gpd
 import plotly.express as px
 import plotly.graph_objects as go
-from dotenv import load_dotenv
-from pydrive.auth import GoogleAuth
-from pydrive.drive import GoogleDrive
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 import io
+from shapely.geometry import Point
 
-import const
-import trip_od
+import const as const
+import pages.lib.trip_od as trip_od
 
 st.set_page_config(**const.SET_PAGE_CONFIG)
-
-# このファイルのディレクトリに移動
-os.chdir(os.path.dirname(__file__))
 # ディレクトリが存在しない場合は作成
 os.makedirs('data', exist_ok=True)
 
-'''
-# .envファイルを読み込み
-#load_dotenv()
-# 環境変数から認証情報を取得
-#client_id = os.getenv('CLIENT_ID')
-#client_secret = os.getenv('CLIENT_SECRET')
-#refresh_token = os.getenv('REFRESH_TOKEN')
-#token_uri = os.getenv('TOKEN_URI')
+# --- サイドバーの設定 ---
+with st.sidebar:
+    st.page_link("main.py", label="ホーム", icon="🏠")
+    st.page_link("pages/1_Data_dashboard.py", label="データダッシュボード", icon="📊")
+    st.page_link("pages/2_Urban_simulation.py", label="都市シミュレーション", icon="💻")
 
-client_id = st.secrets["CLIENT_ID"]
-client_secret = st.secrets["CLIENT_SECRET"]
-refresh_token = st.secrets["REFRESH_TOKEN"]
-token_uri = st.secrets["TOKEN_URI"]
 
-# 認証フローをセットアップ
-gauth = GoogleAuth()
-gauth.settings['client_config'] = {
-    "client_id": client_id,
-    "client_secret": client_secret,
-    "refresh_token": refresh_token,
-    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-    "token_uri": token_uri,
-    "redirect_uris": ["urn:ietf:wg:oauth:2.0:oob"]
-}
-# 初回認証かリフレッシュトークンが無効の場合はブラウザで認証を行う
-try:
-    if gauth.access_token_expired:
-        # アクセストークンが期限切れならリフレッシュ
-        gauth.Refresh()
-    else:
-        # アクセストークンが有効な場合はそのまま使用
-        gauth.Authorize()
-except:
-    # リフレッシュトークンがない場合は初回認証を実行
-    st.error("Authorization failed. Please set up Google Drive API credentials.")
-    st.stop()
-
-# Google Driveへのアクセスを設定
-drive = GoogleDrive(gauth)
-
-# 1世帯情報.csvをダウンロード
-file_id = '1ntzZGqC5sXzvqg4nUCIpDiP_lGAqOvW4'
-downloaded = drive.CreateFile({'id': file_id})
-downloaded.GetContentFile('data/1世帯情報.csv')
-df1 = pd.read_csv('data/1世帯情報.csv')
-# 2世帯個人.csvをダウンロード
-file_id = '1blEh9tQ_oRTNshrj4_4U7vXCZCNXclMk'
-downloaded = drive.CreateFile({'id': file_id})
-downloaded.GetContentFile('data/2世帯個人.csv')
-df2 = pd.read_csv('data/2世帯個人.csv')
-# 3個人票.csvをダウンロード
-file_id = '1u4iLbvj-zW-Qp4OblGj03dqBTLqn5Zj7'
-downloaded = drive.CreateFile({'id': file_id})
-downloaded.GetContentFile('data/3個人票.csv')
-df3 = pd.read_csv('data/3個人票.csv')
-# 大ゾーン.geojsonをダウンロード
-file_id = '1q1BXkA5sW-3YLYNo6tPCyBs1nJfY-mKC'
-downloaded = drive.CreateFile({'id': file_id})
-downloaded.GetContentFile('大ゾーン.geojson')
-geo_data = gpd.read_file('大ゾーン.geojson')
-geojson_file_path = '大ゾーン.geojson'
-'''
-
+# --- データの読み込み---
+# For remote server
 # Secrets Managementからサービスアカウント情報を取得して辞書に再構築
 service_account_info = {
     "type": st.secrets["SERVICE_ACCOUNT_TYPE"],
@@ -123,30 +65,39 @@ def download_file(file_id, file_name):
             print(f"Download {int(status.progress() * 100)}%")
     return file_name
 
-# 1世帯情報.csvをダウンロード
-file_id = '1ntzZGqC5sXzvqg4nUCIpDiP_lGAqOvW4'
-file_name = 'data/1世帯情報.csv'
-downloaded_file = download_file(file_id, file_name)
-df1 = pd.read_csv(downloaded_file)
-# 2世帯個人.csvをダウンロード
-file_id = '1blEh9tQ_oRTNshrj4_4U7vXCZCNXclMk'
-file_name = 'data/2世帯個人.csv'
-downloaded_file = download_file(file_id, file_name)
-df2 = pd.read_csv(downloaded_file)
-# 3個人票.csvをダウンロード
-file_id = '1u4iLbvj-zW-Qp4OblGj03dqBTLqn5Zj7'
-file_name = 'data/3個人票.csv'
-downloaded_file = download_file(file_id, file_name)
-df3 = pd.read_csv(downloaded_file)
-# 大ゾーン.geojsonをダウンロード
-file_id = '1q1BXkA5sW-3YLYNo6tPCyBs1nJfY-mKC'
-file_name = 'data/大ゾーン.geojson'
-downloaded_file = download_file(file_id, file_name)
-geo_data = gpd.read_file(downloaded_file)
+@st.cache_data(show_spinner='データを読み込んでいます。')
+def load_data():
+    # 1世帯情報.csvをダウンロード
+    file_id = '1ntzZGqC5sXzvqg4nUCIpDiP_lGAqOvW4'
+    file_name = 'data/1世帯情報.csv'
+    downloaded_file = download_file(file_id, file_name)
+    df1 = pd.read_csv(downloaded_file)
+    # 2世帯個人.csvをダウンロード
+    file_id = '1blEh9tQ_oRTNshrj4_4U7vXCZCNXclMk'
+    file_name = 'data/2世帯個人.csv'
+    downloaded_file = download_file(file_id, file_name)
+    df2 = pd.read_csv(downloaded_file)
+    # 3個人票.csvをダウンロード
+    file_id = '1u4iLbvj-zW-Qp4OblGj03dqBTLqn5Zj7'
+    file_name = 'data/3個人票.csv'
+    downloaded_file = download_file(file_id, file_name)
+    df3 = pd.read_csv(downloaded_file)
+    # 大ゾーン.geojsonをダウンロード
+    file_id = '1q1BXkA5sW-3YLYNo6tPCyBs1nJfY-mKC'
+    file_name = 'data/大ゾーン.geojson'
+    downloaded_file = download_file(file_id, file_name)
+    geo_data = gpd.read_file(downloaded_file)
+
+    return df1, df2, df3, geo_data
+
+df1, df2, df3, geo_data = load_data()
+
+geo_data["geometry"] = geo_data["geometry"].buffer(0)
 geojson_file_path = 'data/大ゾーン.geojson'
 
 
 '''
+# For local
 # CSVファイルを読み込む。
 df3_path = 'data/3個人票.csv'
 # df1
@@ -164,6 +115,7 @@ geojson_file_path = 'data/大ゾーン.geojson'
 geo_data = gpd.read_file(geojson_file_path)
 '''
 
+# --- 辞書やヘルパー関数の定義 ---
 # 目的コード
 purpose_dict = {1:"通勤", 2:"通学", 3:"帰宅", 4:"買い物", 5:"食事・社交・娯楽", 
                 6:"観光・行楽・レジャー", 7:"通院", 8:"その他私用", 9:"送迎", 10:"販売・配達・仕入・購入先",
@@ -184,6 +136,38 @@ zone_dict = {'松山市1区':'市駅、大街道、松山城', '松山市2区':'
              '東温市1区':'横河原駅、愛大医学部', '東温市2区':'東温市東部山地', '松前町':'松前町',
              '砥部町1区':'砥部町中心部、動物園', '砥部町2区':'砥部南部山地'}
 
+def get_zone_from_lat_lon(lat:float, lon:float) -> str:
+    for idx, row in geo_data.iterrows():
+        if row['geometry'].contains(Point(lon, lat)):
+            return row['R05大ゾーン']
+    return "全地域"
+
+@st.cache_data
+def get_mode_df(df3_selected, purpose_list, mode_list_gaiyou, zone_dict):
+    # ここで重い計算を行う
+    mode_df = pd.DataFrame(columns=mode_list_gaiyou + ['samples'], index=zone_dict.keys())
+    for d in zone_dict.keys():
+        df_od = df3_selected.loc[(df3_selected['到着地大ゾーン'] == d) & (df3_selected['23_目的'].isin(purpose_list)), :]
+        if len(df_od) > 10:
+            for mode in mode_list_gaiyou:
+                mode_df.loc[d, mode] = (df_od['代表交通手段_概要'] == mode).sum() / len(df_od)
+            mode_df.loc[d, 'samples'] = len(df_od)
+    mode_df = mode_df.loc[mode_df.sum(axis=1) != 0, :]
+    mode_df = mode_df.sort_values('samples', ascending=False)[:5]
+    return mode_df
+
+@st.cache_data
+def get_trip_od_purpose(purpose_list, ODzone_list, df3):
+    return trip_od.trip_od_purpose(purpose_list, ODzone_list, df3)
+
+@st.cache_data
+def get_trip_plot_origin(df_trip, selected_area, geojson_file_path, purpose_code, title):
+    return trip_od.plot_trip_origin(df_trip, selected_area, geojson_file_path, purpose_code, title)
+
+@st.cache_data
+def get_trip_plot_destination(df_trip, selected_area, geojson_file_path, purpose_code, title):
+    return trip_od.plot_trip_destination(df_trip, selected_area, geojson_file_path, purpose_code, title)
+
 
 # タイトルと説明を追加
 st.title('2023年松山都市圏パーソントリップ調査')
@@ -193,25 +177,42 @@ st.title('2023年松山都市圏パーソントリップ調査')
 col1, col2, col3 = st.columns(3, gap='small', vertical_alignment='top')
 
 with col1:
-    st.subheader('地図からゾーン名を確認')
+    st.subheader('地図からゾーンを選ぶ')
+    
+    # 初期値をセッションに保存
+    if "last_object_clicked" not in st.session_state:
+        st.session_state["last_object_clicked"] = None
+    if 'selected_zone' not in st.session_state:
+        st.session_state['selected_zone'] = "全地域"
     
     # Folium地図の作成
-    m = folium.Map(location=[33.841936668807115, 132.75165552992496], zoom_start=12, tiles= "openstreetmap") # tiles= "cartodbpositron"
-
+    m = folium.Map(location=[33.841936668807115, 132.75165552992496], zoom_start=12, tiles="openstreetmap") # tiles= "cartodbpositron"
     # GeoJSONデータを透明なレイヤーとして追加
+    '''
     style_function = lambda x: {
         'fillColor': '#transparent',
         'color': '#000000',
         'weight': 1.0,
         'fillOpacity': 0
     }
+    '''
+    # 各ゾーンのスタイルを動的に設定する関数
+    def style_function(feature):
+        zone_name = feature['properties']['R05大ゾーン']
+        
+        # クリックされたゾーンは黄色、それ以外は透明に
+        if zone_name == st.session_state['selected_zone']:
+            return {'fillColor': '#f08080', 'color': '#f08080', 'weight': 2.5, 'fillOpacity': 0.7}
+        else:
+            return {'fillColor': '#transparent', 'color': '#000000', 'weight': 1.0, 'fillOpacity': 0}
+
     
     # ホバー時の挙動
     highlight_function = lambda x: {
         'fillColor': '#ffaf00',
         'color': '#ffaf00',
         'weight': 2.5,
-        'fillOpacity': 0.7
+        'fillOpacity': 0.2
     }
     
     tooltip = folium.GeoJsonTooltip(
@@ -235,21 +236,32 @@ with col1:
         highlight_function=highlight_function,
         tooltip=tooltip
     )
+    m.add_child(area_info) # レイヤーを地図に追加
+    m.keep_in_front(area_info) # レイヤーを最前面に保持
     
-    m.add_child(area_info)
-    m.keep_in_front(area_info)
+    # 地図表示
+    output = st_folium(m, height=400, use_container_width=True)
+    if (
+        output["last_object_clicked"]
+        and output["last_object_clicked"] != st.session_state.get("last_object_clicked")
+    ):
+        st.session_state["last_object_clicked"] = output["last_object_clicked"]
+        zone = get_zone_from_lat_lon(*output["last_object_clicked"].values())
+        st.session_state["selected_zone"] = zone
+        st.rerun()
     
-    st_folium(m, height=400, use_container_width=True, returned_objects=[])
-    
-
 with col2:
     # 地域選択フィルターを追加
-    st.subheader('地域・属性・目的を選択')
-    selected_area = st.selectbox('知りたい地域を選択してください', ["全域"] + [f"{i} ({zone_dict[i]})" for i in zone_dict.keys()])
-    selected_area = "全域" if selected_area == "全域" else selected_area.split(' ')[0] # 選択された地域名のみ取得
+    st.subheader('地域・属性・目的を選ぶ')
+    selected_area = st.selectbox('知りたい地域を選んでください', 
+                                 ["全地域"] + [f"{i} ({zone_dict[i]})" for i in zone_dict.keys()], 
+                                 index=(["全地域"] + list(zone_dict.keys())).index(st.session_state['selected_zone']) if st.session_state['selected_zone'] in zone_dict else 0
+                                 )
+    
+    selected_area = "全地域" if selected_area == "全地域" else selected_area.split(' ')[0] # 選択された地域名のみ取得
     
     # 平日/休日選択ラジオボタン
-    selected_day_text = st.radio('平日/休日を選択してください', ['平日', '休日'], horizontal=True)
+    selected_day_text = st.radio('平日/休日を選んでください', ['平日', '休日'], horizontal=True)
     selected_day = 1 if selected_day_text == '平日' else 2
     
     # 個人属性の選択ボタン
@@ -257,27 +269,50 @@ with col2:
     age = st.selectbox('年齢', list(age_dict.keys()))
     childcare = st.selectbox('18歳以下の子供の有無', ['全て', '子供あり'])
     car = st.selectbox('運転免許の有無', ['全て', '免許なし'])
+    
+    # ユーザーの選択をセッション状態に保存
+    st.session_state['selected_area'] = selected_area
+    st.session_state['selected_day'] = selected_day
+    st.session_state['age'] = age
+    st.session_state['childcare'] = childcare
+    st.session_state['car'] = car
+    
+    # データのフィルタリングをキャッシュする
+    @st.cache_data
+    def filter_data(df2, df3, selected_area, selected_day, age, childcare, car):
+        df3_selected = df3.copy()
+        df2_selected = df2.copy()
+        # 地域フィルタ
+        if selected_area != "全地域":
+            df3_selected = df3_selected[df3_selected['ID'].isin(df2[df2['居住大ゾーン'] == selected_area]['ID'])]
+            df2_selected = df2_selected[df2_selected['居住大ゾーン'] == selected_area]
+        # 平日/休日フィルタ
+        df3_selected = df3_selected[df3_selected['11_平休'] == selected_day]
+        # 年齢フィルタ
+        age_range = age_dict[age]
+        df2_selected = df2_selected[df2_selected['22_■3_年齢'].between(age_range[0], age_range[1])]
+        df3_selected = df3_selected[df3_selected['ID'].isin(df2_selected['ID'])]
+        # 子供の有無フィルタ
+        if childcare == '子供あり':
+            household_with_children = df2[df2['22_■3_年齢'] <= 18]['5_整理番号_市町村・ロット・SEQ'].unique()
+            df2_selected = df2_selected[df2_selected['5_整理番号_市町村・ロット・SEQ'].isin(household_with_children)]
+            df3_selected = df3_selected[df3_selected['ID'].isin(df2_selected['ID'])]
+        # 運転免許フィルタ
+        if car == '免許なし':
+            df2_selected = df2_selected[df2_selected['27_■3_保有運転免許_①保有運転免許種類'].isin([4, 5])]
+            df3_selected = df3_selected[df3_selected['ID'].isin(df2_selected['ID'])]
 
-    df3_selected = df3.loc[(df3['ID'].isin(df2.loc[df2['居住大ゾーン']==selected_area, 'ID']) if selected_area != "全域" else True) & 
-                        (df3['11_平休'] == selected_day) &
-                        (df3['ID'].isin(df2.loc[df2['22_■3_年齢'].between(age_dict[age][0], age_dict[age][1]), 'ID'])) &
-                        ((df3['5_整理番号_市町村'].isin(df2.loc[df2['22_■3_年齢']<=18, '5_整理番号_市町村・ロット・SEQ']))&(df3['ID'].isin(df2.loc[df2['22_■3_年齢']>20, 'ID'])) if childcare == '子供あり' else True) &
-                        (df3['ID'].isin(df2.loc[df2['27_■3_保有運転免許_①保有運転免許種類'].isin([4, 5]), 'ID']) if car == '免許なし' else True)
-                        ]
-    df2_selected = df2.loc[(df2['居住大ゾーン']==selected_area if selected_area != "全域" else True) &
-                        (df2['22_■3_年齢'].between(age_dict[age][0], age_dict[age][1])) &
-                        ((df2['5_整理番号_市町村・ロット・SEQ'].isin(df2.loc[df2['22_■3_年齢']<=18, '5_整理番号_市町村・ロット・SEQ']))&(df2['22_■3_年齢']>20) if childcare == '子供あり' else True) &
-                        (df2['27_■3_保有運転免許_①保有運転免許種類'].isin([4, 5]) if car == '免許なし' else True)
-                    ]        
+        return df2_selected, df3_selected
+
+    df2_selected, df3_selected = filter_data(df2, df3, selected_area, selected_day, age, childcare, car)    
     # データ数
     st.write(f"該当するデータ: {len(df2_selected)}人, {len(df3_selected)}回の移動")
 
 # 国勢調査の結果-------------------------------------------------------------------
 with col3:
-    st.subheader('地域の人口構成')
-    st.write(f'{selected_area}の年代別人口')
+    st.subheader(f'{selected_area}の人口構成')
     
-    if selected_area != '全域':
+    if selected_area != '全地域':
         df = pd.read_csv('census_data/population_by_generation.csv',index_col=0)
         # グラフを描画
         fig, ax = plt.subplots()
@@ -285,7 +320,7 @@ with col3:
         plt.xticks(rotation=45)
         st.pyplot(plt)
         
-    elif selected_area == '全域':
+    elif selected_area == '全地域':
         PATH = 'census_data/census_population.csv'
         df_census = pd.read_csv(PATH, encoding='shift_jis',header=4)
 
@@ -311,7 +346,7 @@ with col3:
 # --------------------------------------------------------------------------------
 
 
-st.subheader('地域の基本情報')
+st.subheader(f'選択した人の移動の基本情報')
 st.write('<span style="color:green"> 小数字</span>は都市圏全体の平均値との差を表します。', unsafe_allow_html=True)
 # 上段の3列構成
 col4_1, col4_2, col4_3 = st.columns(3)
@@ -368,37 +403,21 @@ with col4_3:
             value=f"{round(ratio_selected['徒歩'] * 100, 1)} %",
             delta = f"{round((ratio_selected['徒歩'] - ratio_all['徒歩']) * 100, 1)} %")
 
-# 移動時間
 
 
-# 移動距離
-
-
-
-st.subheader('目的・目的地ごとの交通手段')
+st.subheader(f'選択した人の目的・目的地ごとの交通手段')
 # 目的の選択ボタン
-st.write('目的を選択してください。')
-purpose_list = st.multiselect('目的', [f"{i}" for i in purpose_dict.values()])
-df3_purpose = df3_selected.loc[df3_selected['23_目的'].isin([k for k, v in purpose_dict.items() if v in purpose_list]), :]
+st.write('目的を選んでください。')
+purpose_list = st.multiselect('目的', [f"{i}" for i in purpose_dict.values()], default=[f"{i}" for i in purpose_dict.values()])
 
 # mode_df を作成する
 mode_list_gaiyou = ['徒歩', '自転車', '原付・二輪', 'タクシー', '自動車', 'バス', '鉄道', '路面電車', '船', '飛行機', 'その他']
 color_mode_dict = {'徒歩': 'royalblue', '自転車': 'lightgreen', '原付・二輪': 'green', 'タクシー': 'wheat', '自動車': 'purple', 
                 'バス': 'orange', '鉄道': 'red', '路面電車': 'pink', '船': 'lightgray', '飛行機': 'darkgray', 'その他': 'dimgray'}
-mode_df = pd.DataFrame(columns=mode_list_gaiyou + ['samples'], index=zone_dict.keys())
 
-# mode_df を作成する
-for d in zone_dict.keys():
-    #df_od = df3_purpose.loc[(df3_purpose['到着地大ゾーン'] == d) & (df3_purpose['23_目的'] != 3), :]
-    df_od = df3_purpose.loc[(df3_purpose['到着地大ゾーン'] == d), :]
-    if len(df_od) > 10:  # トリップ数が少ない場合は無視
-        for mode in mode_list_gaiyou:
-            mode_df.loc[d, mode] = (df_od['代表交通手段_概要'] == mode).sum() / len(df_od)
-        mode_df.loc[d, 'samples'] = len(df_od)
-            
-mode_df = mode_df.loc[mode_df.sum(axis=1) != 0, :] # 0のところは削除
-mode_df = mode_df.sort_values('samples', ascending=False)[:5] # 5つまで表示
-#mode_df=mode_df.sort_index() # ゾーン名でソート
+# メインのコード内でキャッシュされた関数を呼び出す
+mode_df = get_mode_df(df3_selected, [k for k, v in purpose_dict.items() if v in purpose_list], mode_list_gaiyou, zone_dict)
+
 
 if len(mode_df) != 0:
     # データフレームをモルテン形式に変換
@@ -427,7 +446,7 @@ if len(mode_df) != 0:
     # テキスト表示のフォーマット設定
     fig.update_traces(textposition='inside', textfont_size=14)
     # グラフのレイアウトを更新
-    fig.update_layout(title=f"{selected_area}({zone_dict[selected_area]})から出発する移動の交通手段" if selected_area != "全域" else "全域から移動の交通手段",
+    fig.update_layout(title=f"{selected_area}({zone_dict[selected_area]})から出発する移動の交通手段" if selected_area != "全地域" else "全地域から移動の交通手段",
                     xaxis_title="割合 (%)",
                     yaxis_title="",
                     yaxis={'tickfont': {'size': 16}},
@@ -442,31 +461,54 @@ else:
 col4, col5 = st.columns(2, gap='small', vertical_alignment='top')
 
 with col4:
-    st.subheader('地域の人がよく訪れる場所')
-    if selected_area == "全域":
-        st.write('地域を選択してください。')
+    st.subheader(f'{selected_area}に住む人がよく訪れる場所')
+    if selected_area == "全地域":
+        st.write('地域を選んでください。')
     else:
         #selected_purpose = st.multiselect('目的', [f"{i}" for i in purpose_dict.values()])
         purpose_o = st.selectbox('目的', [f"{i}" for i in purpose_dict.values()], key='origin')
         if len(purpose_o) == 0:
-            st.write('目的を選択してください。')
+            st.write('目的を選んでください。')
         else:
-            df_trip_o = trip_od.trip_od_purpose(purpose_list=[k for k, v in purpose_dict.items() if v == purpose_o], ODzone_list=list(zone_dict.keys()), df3=df3_selected)
+            df_trip_o = get_trip_od_purpose(purpose_list=[k for k, v in purpose_dict.items() if v == purpose_o], ODzone_list=list(zone_dict.keys()), df3=df3)
         
-        fig = trip_od.plot_trip_origin(df_trip_o, selected_area, geojson_file_path, [k for k, v in purpose_dict.items() if v == purpose_o], title=purpose_o)
+        fig = get_trip_plot_origin(df_trip_o, selected_area, geojson_file_path, [k for k, v in purpose_dict.items() if v == purpose_o], title=purpose_o)
+        # trip_od.plot_trip_origin(df_trip_o, selected_area, geojson_file_path, [k for k, v in purpose_dict.items() if v == purpose_o], title=purpose_o)
         st.pyplot(fig)
+        # 上位5つの目的地を表示
+        st.write('上位5つ')
+        tbl_o = df_trip_o.loc[selected_area].sort_values(ascending=False)[:5].rename(index={k: f'{k} ({zone_dict[k]})' for k in zone_dict.keys()}).astype(int)
+        st.markdown(f"""
+                    1. {tbl_o.index[0]}  {tbl_o.iloc[0]}
+                    1. {tbl_o.index[1]}  {tbl_o.iloc[1]}
+                    1. {tbl_o.index[2]}  {tbl_o.iloc[2]}
+                    1. {tbl_o.index[3]}  {tbl_o.iloc[3]}
+                    1. {tbl_o.index[4]}  {tbl_o.iloc[4]}
+                    """
+        )
     
 with col5:
-    st.subheader('地域を訪れる人がどこから来るか')
-    if selected_area == "全域":
-        st.write('地域を選択してください。')
+    st.subheader(f'{selected_area}を訪れる人がどこから来るか')
+    if selected_area == "全地域":
+        st.write('地域を選んでください。')
     else:
         #selected_purpose = st.multiselect('目的', [f"{i}" for i in purpose_dict.values()])
         purpose_d = st.selectbox('目的', [f"{i}" for i in purpose_dict.values()], key='destination')
         if len(purpose_d) == 0:
-            st.write('目的を選択してください。')
+            st.write('目的を選んでください。')
         else:
-            df_trip_d = trip_od.trip_od_purpose(purpose_list=[k for k, v in purpose_dict.items() if v == purpose_d], ODzone_list=list(zone_dict.keys()), df3=df3)
+            df_trip_d = get_trip_od_purpose(purpose_list=[k for k, v in purpose_dict.items() if v == purpose_d], ODzone_list=list(zone_dict.keys()), df3=df3)
         
-        fig = trip_od.plot_trip_destination(df_trip_d, selected_area, geojson_file_path, [k for k, v in purpose_dict.items() if v == purpose_d], title=purpose_d)
+        fig = get_trip_plot_destination(df_trip_d, selected_area, geojson_file_path, [k for k, v in purpose_dict.items() if v == purpose_d], title=purpose_d)
         st.pyplot(fig)
+        # 上位5つの出発地を表示
+        st.write('上位5つ')
+        tbl_d = df_trip_d[selected_area].sort_values(ascending=False)[:5].rename(index={k: f'{k} ({zone_dict[k]})' for k in zone_dict.keys()}).astype(int)
+        st.markdown(f"""
+                    1. {tbl_d.index[0]}  {tbl_d.iloc[0]}
+                    1. {tbl_d.index[1]}  {tbl_d.iloc[1]}
+                    1. {tbl_d.index[2]}  {tbl_d.iloc[2]}
+                    1. {tbl_d.index[3]}  {tbl_d.iloc[3]}
+                    1. {tbl_d.index[4]}  {tbl_d.iloc[4]}
+                    """
+        )

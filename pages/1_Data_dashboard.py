@@ -241,7 +241,7 @@ with col1:
     m.keep_in_front(area_info) # レイヤーを最前面に保持
     
     # 地図表示
-    output = st_folium(m, height=600, use_container_width=True)
+    output = st_folium(m, height=500, use_container_width=True)
     if (
         output["last_object_clicked"]
         and output["last_object_clicked"] != st.session_state.get("last_object_clicked")
@@ -311,9 +311,9 @@ with col2:
 
 col3_1_title, col3_2_title, col4_title = st.columns([0.25, 0.25, 0.5])
 with col3_1_title:
-    st.subheader(f'{selected_area}の人口構成')
+    st.subheader(f'{selected_area}の人口')
 with col3_2_title:
-    st.subheader(f'松山都市圏全体の世帯構成')
+    st.subheader(f'都市圏全体の人口')
 with col4_title:
     st.subheader(f'選択した人・地域の移動の基本情報')
     st.write('<span style="color:green"> 小数字</span>は都市圏全体の平均値との差を表します。', unsafe_allow_html=True)

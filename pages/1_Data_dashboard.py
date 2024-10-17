@@ -170,14 +170,15 @@ def get_trip_plot_destination(df_trip, selected_area, geojson_file_path, purpose
 
 
 # タイトルと説明を追加
-st.title('2023年松山都市圏パーソントリップ調査')
+st.title('2023年松山都市圏パーソントリップ調査 データダッシュボード')
 #st.write('このダッシュボードでは、各地域に住んでいる人の移動に着目して分析を行います。')
 
 # 上段の3列構成
-col1, col2, col3 = st.columns(3, gap='small', vertical_alignment='top')
+col1, col2 = st.columns([0.7, 0.3], gap='small', vertical_alignment='top')
 
 with col1:
     st.subheader('地図からゾーンを選ぶ')
+    st.write("クリックしたら、情報が表示されるまで、何も操作せずしばらくお待ちください")
     
     # 初期値をセッションに保存
     if "last_object_clicked" not in st.session_state:
@@ -186,7 +187,7 @@ with col1:
         st.session_state['selected_zone'] = "全地域"
     
     # Folium地図の作成
-    m = folium.Map(location=[33.841936668807115, 132.75165552992496], zoom_start=12, tiles="openstreetmap") # tiles= "cartodbpositron"
+    m = folium.Map(location=[33.841936668807115, 132.75165552992496], zoom_start=12, tiles="openstreetmap") # tiles= "cartodbpositron", "cartodbvoyager", "openstreetmap"
     # GeoJSONデータを透明なレイヤーとして追加
     '''
     style_function = lambda x: {
@@ -240,7 +241,7 @@ with col1:
     m.keep_in_front(area_info) # レイヤーを最前面に保持
     
     # 地図表示
-    output = st_folium(m, height=400, use_container_width=True)
+    output = st_folium(m, height=600, use_container_width=True)
     if (
         output["last_object_clicked"]
         and output["last_object_clicked"] != st.session_state.get("last_object_clicked")
@@ -255,7 +256,7 @@ with col2:
     st.subheader('地域・属性・目的を選ぶ')
     selected_area = st.selectbox('知りたい地域を選んでください', 
                                  ["全地域"] + [f"{i} ({zone_dict[i]})" for i in zone_dict.keys()], 
-                                 index=(["全地域"] + list(zone_dict.keys())).index(st.session_state['selected_zone']) if st.session_state['selected_zone'] in zone_dict else 0
+                                 index=(["全地域"] + list(zone_dict.keys())).index(st.session_state['selected_zone']) if st.session_state['selected_zone'] in zone_dict else 0,
                                  )
     
     selected_area = "全地域" if selected_area == "全地域" else selected_area.split(' ')[0] # 選択された地域名のみ取得
@@ -308,10 +309,19 @@ with col2:
     # データ数
     st.write(f"該当するデータ: {len(df2_selected)}人, {len(df3_selected)}回の移動")
 
-# 国勢調査の結果-------------------------------------------------------------------
-with col3:
+col3_1_title, col3_2_title, col4_title = st.columns([0.25, 0.25, 0.5])
+with col3_1_title:
     st.subheader(f'{selected_area}の人口構成')
-    
+with col3_2_title:
+    st.subheader(f'松山都市圏全体の世帯構成')
+with col4_title:
+    st.subheader(f'選択した人・地域の移動の基本情報')
+    st.write('<span style="color:green"> 小数字</span>は都市圏全体の平均値との差を表します。', unsafe_allow_html=True)
+
+col3_1, col3_2, col4_1, col4_2, col4_3 = st.columns([0.25, 0.25, 0.166, 0.166, 0.166])
+# 国勢調査の結果-------------------------------------------------------------------
+with col3_1:
+    #st.subheader(f'{selected_area}の人口構成')
     if selected_area != '全地域':
         df = pd.read_csv('census_data/population_by_generation.csv',index_col=0)
         # グラフを描画
@@ -343,13 +353,32 @@ with col3:
         # Y軸ラベルを「万人」単位で表示
         # ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: f'{int(x/10000)}万人'))
         st.pyplot(plt)
+
+with col3_2:
+    PATH = 'census_data/census_population.csv'
+    df_census = pd.read_csv(PATH, encoding='shift_jis',header=4)
+
+    # 対象の地域のみ抽出
+    df_census = df_census[(df_census['市区町村名'] == '松山市') | (df_census['市区町村名'] == '東温市')|
+            (df_census['市区町村名'] == '伊予市')|(df_census['市区町村名'] == '松前町')|(df_census['市区町村名'] == '砥部町')]
+    df_census = df_census[(df_census['男女'] == '総数')]
+    # 地域階層レベル1に絞る
+    df_census_level1 = df_census[(df_census['地域階層レベル'] == 1)]
+    # 年齢を超細かく見ると...
+    df_census_level1 = df_census_level1[['市区町村コード', '町丁字コード', '地域階層レベル','都道府県名', '市区町村名', '大字・町名', '字・丁目名', '総数',
+                '年齢「不詳」', '（再掲）15歳未満','（再掲）15〜64歳', '（再掲）65歳以上', '-','-.1']]
+    df_census_level1_st = df_census_level1.loc[: , ["（再掲）15歳未満", "（再掲）15〜64歳",'（再掲）65歳以上','年齢「不詳」']].astype('int')
+    df_census_level1_st=df_census_level1_st.rename(columns={'（再掲）15歳未満': '15歳未満','（再掲）15〜64歳': '15〜64歳','（再掲）65歳以上': '65歳〜','年齢「不詳」': '不明',}, 
+                                                    index={0: '松山市',2576: '伊予市',2871: '東温市',3015: '松前町',3036: '砥部町'})
+    df_sum = df_census_level1_st.sum()
+    # グラフを描画
+    fig, ax = plt.subplots()
+    ax.bar(df_sum.index,df_sum)
+    # Y軸ラベルを「万人」単位で表示
+    # ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: f'{int(x/10000)}万人'))
+    st.pyplot(plt)
 # --------------------------------------------------------------------------------
 
-
-st.subheader(f'選択した人の移動の基本情報')
-st.write('<span style="color:green"> 小数字</span>は都市圏全体の平均値との差を表します。', unsafe_allow_html=True)
-# 上段の3列構成
-col4_1, col4_2, col4_3 = st.columns(3)
 with col4_1:
     # 外出率
     out_rate = (df2_selected[f'{selected_day_text}外出'] * df2_selected['拡大係数']).mean(skipna=True)
@@ -405,7 +434,7 @@ with col4_3:
 
 
 
-st.subheader(f'選択した人の目的・目的地ごとの交通手段')
+st.subheader(f'選択した人の目的地ごとの交通手段')
 # 目的の選択ボタン
 st.write('目的を選んでください。')
 purpose_list = st.multiselect('目的', [f"{i}" for i in purpose_dict.values()], default=[f"{i}" for i in purpose_dict.values()])

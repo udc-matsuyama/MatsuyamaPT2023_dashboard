@@ -4,6 +4,6 @@ SET_PAGE_CONFIG = {
     "layout": "wide",
     "initial_sidebar_state": "auto",
     "menu_items": {
-        'About': "# This is a header. This is an *extremely* cool app!"
+        'About': "# 松山PT調査 データ可視化ダッシュボードです"
         }
 }

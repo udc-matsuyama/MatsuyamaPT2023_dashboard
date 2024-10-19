@@ -239,7 +239,7 @@ def get_trip_info_selected(df2_selected, df3_selected, selected_day_text):
     return [out_rate, trip_num, ratio_selected]
 
 @st.cache_data
-def plot_mode_df(df3_selected, purpose_list, mode_list_gaiyou, zone_dict):
+def plot_mode_df(df3_selected, purpose_list, mode_list_gaiyou, zone_dict, selected_area):
     # ここで重い計算を行う
     mode_df = pd.DataFrame(columns=mode_list_gaiyou + ['samples'], index=zone_dict.keys())
     for d in zone_dict.keys():
@@ -278,7 +278,7 @@ def plot_mode_df(df3_selected, purpose_list, mode_list_gaiyou, zone_dict):
         # テキスト表示のフォーマット設定
         fig.update_traces(textposition='inside', textfont_size=14)
         # グラフのレイアウトを更新
-        fig.update_layout(title=f'{st.session_state["selected_zone"]}({zone_dict[st.session_state["selected_zone"]]})から出発する移動の交通手段' if st.session_state["selected_zone"] != "全地域" else "全地域から移動の交通手段",
+        fig.update_layout(title=f'{selected_area}({zone_dict[selected_area]})から出発する移動の交通手段' if selected_area != "全地域" else "全地域から移動の交通手段",
                         xaxis_title="割合 (%)",
                         yaxis_title="",
                         yaxis={'tickfont': {'size': 16}},
@@ -458,7 +458,7 @@ def show():
 
     # mode_df を作成する
 
-    fig = plot_mode_df(df3_selected, [k for k, v in purpose_dict.items() if v in purpose_list], mode_list_gaiyou, zone_dict)
+    fig = plot_mode_df(df3_selected, [k for k, v in purpose_dict.items() if v in purpose_list], mode_list_gaiyou, zone_dict, selected_area)
     if isinstance(fig, str):
         st.write(fig, unsafe_allow_html=True)
     else:

@@ -211,7 +211,7 @@ def census_area_chart(selected_area, census_area):
         fig, ax = plt.subplots(figsize=(5,3))
         ax.set_xlabel('年齢')
         ax.set_ylabel('人口')
-        ax.bar(df_sum.index,df_sum)
+        ax.bar(df_sum.index,df_sum,width=0.6)
         return fig
 
 @st.cache_data

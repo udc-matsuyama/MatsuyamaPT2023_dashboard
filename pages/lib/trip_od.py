@@ -2,10 +2,9 @@ import pandas as pd
 import numpy as np
 import geopandas as gpd
 import matplotlib.pyplot as plt
+import japanize_matplotlib
 
-import const
-
-plt.rcParams['font.family'] = const.PLOT_FONT
+import const as const
 
 # 目的コード
 purpose_dict = {1:"通勤", 2:"通学", 3:"帰宅", 4:"買い物", 5:"食事・社交・娯楽", 
@@ -56,10 +55,18 @@ def plot_trip_origin(trip_od: pd.DataFrame, selected_area: str, geojson_file_pat
     geo_data.plot(column=selected_area, ax=ax, cmap='OrRd', legend=True, legend_kwds = {'shrink': 0.9}) # norm=norm, 
     # 対象地域を緑色で縁取る
     geo_data[geo_data['R05大ゾーン'] == selected_area].boundary.plot(ax=ax, edgecolor='lightgreen', linewidth=1)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    plt.gca().spines['right'].set_visible(False)
+    plt.gca().spines['top'].set_visible(False)
+    plt.gca().spines['bottom'].set_visible(False)
+    plt.gca().spines['left'].set_visible(False)
+    '''
     if title is None:
         plt.title(f"{selected_area}({zone_dict[selected_area]})からの出発トリップ({', '.join([purpose_dict[purpose] for purpose in purpose_list])})")
     else:
         plt.title(f"{selected_area}({zone_dict[selected_area]})からの出発トリップ({title})")
+    '''
             
     return fig
 
@@ -79,9 +86,18 @@ def plot_trip_destination(trip_od: pd.DataFrame, selected_area: str, geojson_fil
     geo_data.plot(column=selected_area, ax=ax, cmap='OrRd', legend=True, legend_kwds = {'shrink': 0.9}) # norm=norm, 
     # 対象地域を緑色で縁取る
     geo_data[geo_data['R05大ゾーン'] == selected_area].boundary.plot(ax=ax, edgecolor='lightgreen', linewidth=1)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    plt.gca().spines['right'].set_visible(False)
+    plt.gca().spines['top'].set_visible(False)
+    plt.gca().spines['bottom'].set_visible(False)
+    plt.gca().spines['left'].set_visible(False)
+    
+    '''
     if title is None:
         plt.title(f"{selected_area}({zone_dict[selected_area]})への到着トリップ({', '.join([purpose_dict[purpose] for purpose in purpose_list])})")
     else:
         plt.title(f"{selected_area}({zone_dict[selected_area]})への到着トリップ({title})")
+    '''
             
     return fig

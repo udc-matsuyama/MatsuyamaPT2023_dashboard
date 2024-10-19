@@ -3,3 +3,9 @@ data
 sample_data
 .venv
 .python-version
+client_secrets.json
+credentials.json
+Gdrive_setup.py
+.env
+secrets.toml
+__pycache__
